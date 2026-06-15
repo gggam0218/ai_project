@@ -1,109 +1,99 @@
 import streamlit as st
-import pandas as pd
+import csv
+from datetime import datetime
 
 st.set_page_config(page_title="자살 상담건수 분석", page_icon="📊")
 
-# CSV 파일 읽기
-df = pd.read_csv("lele.csv")
+# CSV 읽기
+data = []
 
-# 날짜 만들기
-df["날짜"] = pd.to_datetime(df[["연", "월", "일"]])
+with open("../lele(1).csv", "r", encoding="cp949") as f:
+    reader = csv.DictReader(f)
 
-# 월별 평균 계산
-monthly_avg = df.groupby("월")["상담건수"].mean()
+    for row in reader:
+        row["연"] = int(row["연"])
+        row["월"] = int(row["월"])
+        row["일"] = int(row["일"])
+        row["상담건수"] = int(row["상담건수"])
+        row["날짜"] = datetime(row["연"], row["월"], row["일"])
 
-# 최고, 최저 날짜 찾기
-max_row = df.loc[df["상담건수"].idxmax()]
-min_row = df.loc[df["상담건수"].idxmin()]
+        data.append(row)
 
 st.title("📞 자살 상담건수 분석")
 
-# 월 선택
 month = st.selectbox(
     "월을 선택하세요",
     [1, 2, 3, 4],
     format_func=lambda x: f"{x}월"
 )
 
-st.subheader(f"{month}월 평균 상담건수")
+# 선택한 월 데이터
+month_data = [x for x in data if x["월"] == month]
+
+# 평균
+avg_count = sum(x["상담건수"] for x in month_data) / len(month_data)
+
+# 최고
+max_data = max(month_data, key=lambda x: x["상담건수"])
+
+# 최저
+min_data = min(month_data, key=lambda x: x["상담건수"])
+
+st.subheader(f"📌 {month}월 분석 결과")
+
 st.metric(
-    label=f"{month}월 평균",
-    value=f"{monthly_avg[month]:.1f}건"
+    "평균 상담건수",
+    f"{avg_count:.1f}건"
 )
-
-st.divider()
-
-# 최고 날짜
-st.subheader("📈 최고 상담건수")
-st.write(
-    f"**{int(max_row['연'])}년 {int(max_row['월'])}월 {int(max_row['일'])}일**"
-)
-st.write(f"상담건수 : **{int(max_row['상담건수'])}건**")
-
-# 최저 날짜
-st.subheader("📉 최저 상담건수")
-st.write(
-    f"**{int(min_row['연'])}년 {int(min_row['월'])}월 {int(min_row['일'])}일**"
-)
-st.write(f"상담건수 : **{int(min_row['상담건수'])}건**")
-
-st.divider()
-
-# 증가 감소 경향 분석
-st.subheader("📊 증가·감소 경향 분석")
-
-jan = monthly_avg[1]
-feb = monthly_avg[2]
-mar = monthly_avg[3]
-apr = monthly_avg[4]
-
-analysis = []
-
-if feb > jan:
-    analysis.append("• 1월보다 2월의 평균 상담건수가 증가했습니다.")
-else:
-    analysis.append("• 1월보다 2월의 평균 상담건수가 감소했습니다.")
-
-if mar > feb:
-    analysis.append("• 2월보다 3월의 평균 상담건수가 증가했습니다.")
-else:
-    analysis.append("• 2월보다 3월의 평균 상담건수가 감소했습니다.")
-
-if apr > mar:
-    analysis.append("• 3월보다 4월의 평균 상담건수가 증가했습니다.")
-else:
-    analysis.append("• 3월보다 4월의 평균 상담건수가 감소했습니다.")
-
-for text in analysis:
-    st.write(text)
-
-st.write("")
-st.write("### 종합 분석")
-
-if jan == monthly_avg.max():
-    highest_month = 1
-elif feb == monthly_avg.max():
-    highest_month = 2
-elif mar == monthly_avg.max():
-    highest_month = 3
-else:
-    highest_month = 4
-
-if jan == monthly_avg.min():
-    lowest_month = 1
-elif feb == monthly_avg.min():
-    lowest_month = 2
-elif mar == monthly_avg.min():
-    lowest_month = 3
-else:
-    lowest_month = 4
 
 st.write(
-    f"""
-- 평균 상담건수가 가장 높은 달은 **{highest_month}월**입니다.
-- 평균 상담건수가 가장 낮은 달은 **{lowest_month}월**입니다.
-- 1월부터 3월까지는 전반적으로 감소하는 경향을 보였습니다.
-- 4월에는 상담건수가 다시 증가하는 모습을 보였습니다.
-- 전체적으로 상담건수는 증가와 감소를 반복하며 변동하는 경향을 나타냅니다.
-"""
+    f"🔺 최고 상담건수 : {max_data['상담건수']}건 "
+    f"({max_data['날짜'].strftime('%Y-%m-%d')})"
 )
+
+st.write(
+    f"🔻 최저 상담건수 : {min_data['상담건수']}건 "
+    f"({min_data['날짜'].strftime('%Y-%m-%d')})"
+)
+
+# 증가·감소 경향 분석
+first_week_avg = (
+    sum(x["상담건수"] for x in month_data[:7])
+    / len(month_data[:7])
+)
+
+last_week_avg = (
+    sum(x["상담건수"] for x in month_data[-7:])
+    / len(month_data[-7:])
+)
+
+st.subheader("📈 증가·감소 경향")
+
+if last_week_avg > first_week_avg:
+    st.success(
+        f"{month}월은 초반 평균({first_week_avg:.1f}건)보다 "
+        f"후반 평균({last_week_avg:.1f}건)이 높아 증가하는 경향을 보입니다."
+    )
+
+elif last_week_avg < first_week_avg:
+    st.info(
+        f"{month}월은 초반 평균({first_week_avg:.1f}건)보다 "
+        f"후반 평균({last_week_avg:.1f}건)이 낮아 감소하는 경향을 보입니다."
+    )
+
+else:
+    st.warning(
+        f"{month}월은 초반과 후반 평균이 비슷하여 큰 변화가 없습니다."
+    )
+
+# 월별 평균 비교
+st.subheader("📊 월별 평균 상담건수")
+
+month_avg = {}
+
+for m in [1, 2, 3, 4]:
+    temp = [x["상담건수"] for x in data if x["월"] == m]
+    month_avg[m] = sum(temp) / len(temp)
+
+for m, avg in month_avg.items():
+    st.write(f"{m}월 평균 : {avg:.1f}건")
