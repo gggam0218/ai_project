@@ -5,10 +5,12 @@ st.set_page_config(page_title="자살률 분석", layout="wide")
 
 st.title("📊 자살률 분석")
 
-# CSV 불러오기
-df = pd.read_csv("../dog.csv", encoding="cp949")
+try:
+    df = pd.read_csv("dog.csv", encoding="cp949")
+except Exception as e:
+    st.error(f"CSV 파일을 불러올 수 없습니다.\n{e}")
+    st.stop()
 
-# 분석할 항목
 items = {
     "군 자살률": "군자살률(10만명당)",
     "민간 자살률": "민간자살률(10만명당)",
@@ -22,67 +24,40 @@ choice = st.radio(
 
 col = items[choice]
 
-data = df[["년도", col]].dropna()
+if col not in df.columns:
+    st.error(f"'{col}' 컬럼이 CSV에 없습니다.")
+    st.write("현재 컬럼명:", df.columns.tolist())
+    st.stop()
 
-# 최고값
+data = df[["년도", col]].copy()
+
+data[col] = pd.to_numeric(data[col], errors="coerce")
+data = data.dropna()
+
+if data.empty:
+    st.error("분석할 데이터가 없습니다.")
+    st.stop()
+
 max_row = data.loc[data[col].idxmax()]
-
-# 최저값
 min_row = data.loc[data[col].idxmin()]
-
-# 평균
 avg = data[col].mean()
 
 st.header(f"📌 {choice} 분석 결과")
 
 st.subheader("가장 높은 자살률")
-st.write(f"연도 : {int(max_row['년도'])}년")
+st.write(f"연도 : {max_row['년도']}년")
 st.write(f"자살률 : {max_row[col]:.2f}")
 
 st.subheader("가장 낮은 자살률")
-st.write(f"연도 : {int(min_row['년도'])}년")
+st.write(f"연도 : {min_row['년도']}년")
 st.write(f"자살률 : {min_row[col]:.2f}")
 
 st.subheader("평균 자살률")
 st.write(f"{avg:.2f}")
 
-# 자살률 순위
 st.subheader("📋 자살률이 높은 순")
 
 sorted_df = data.sort_values(by=col, ascending=False)
 sorted_df.columns = ["년도", "자살률"]
 
-st.dataframe(
-    sorted_df,
-    use_container_width=True
-)
-
-# 경향 설명
-st.header("📈 자살률 경향")
-
-if choice == "군 자살률":
-    st.write(
-        """
-        - 2011년에 가장 높았으며 이후 전반적으로 감소하는 추세를 보인다.
-        - 최근으로 갈수록 자살률이 낮아지는 경향이 나타난다.
-        - 전체적으로 개선되는 모습을 보인다.
-        """
-    )
-
-elif choice == "민간 자살률":
-    st.write(
-        """
-        - 초반에는 감소하는 추세를 보였다.
-        - 최근에는 감소세가 둔화되며 일부 증가하는 모습이 나타난다.
-        - 전반적으로는 과거보다 낮아졌지만 높은 수준이 유지되고 있다.
-        """
-    )
-
-else:
-    st.write(
-        """
-        - 초반에는 감소하는 모습을 보였다.
-        - 이후 일부 연도에서 다시 증가하는 경향이 나타났다.
-        - 최근 몇 년간 비교적 높은 수준이 유지되고 있다.
-        """
-    )
+st.dataframe(sorted_df, use_container_width=True)
