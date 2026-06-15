@@ -1,73 +1,109 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="자살률 분석", layout="wide")
+st.set_page_config(page_title="자살 상담건수 분석", page_icon="📊")
 
-st.title("📊 자살률 분석")
+# CSV 파일 읽기
+df = pd.read_csv("lele.csv")
 
-# 1. 파일 읽기 (인코딩 문제 해결을 위한 순차적 시도)
-@st.cache_data
-def load_data(file_path):
-    try:
-        # cp949로 먼저 시도하고, 실패 시 utf-8-sig(BOM 처리)로 시도
-        return pd.read_csv(file_path, encoding="cp949")
-    except:
-        return pd.read_csv(file_path, encoding="utf-8-sig")
+# 날짜 만들기
+df["날짜"] = pd.to_datetime(df[["연", "월", "일"]])
 
-try:
-    df = load_data("dog.csv")
-except Exception as e:
-    st.error(f"CSV 파일을 불러올 수 없습니다. 파일명과 인코딩을 확인해주세요.\n오류 내용: {e}")
-    st.stop()
+# 월별 평균 계산
+monthly_avg = df.groupby("월")["상담건수"].mean()
 
-# 2. 분석 항목 설정
-items = {
-    "군 자살률": "군자살률(10만명당)",
-    "민간 자살률": "민간자살률(10만명당)",
-    "20대 남성 자살률": "20대 자살율(10만명당_남자)"
-}
+# 최고, 최저 날짜 찾기
+max_row = df.loc[df["상담건수"].idxmax()]
+min_row = df.loc[df["상담건수"].idxmin()]
 
-choice = st.radio("자살률 종류를 선택하세요.", list(items.keys()), horizontal=True)
-col = items[choice]
+st.title("📞 자살 상담건수 분석")
 
-# 3. 데이터 확인 및 전처리
-if col not in df.columns:
-    st.error(f"CSV 파일에 '{col}' 컬럼이 존재하지 않습니다.")
-    st.info(f"찾은 컬럼 목록: {df.columns.tolist()}")
-    st.stop()
+# 월 선택
+month = st.selectbox(
+    "월을 선택하세요",
+    [1, 2, 3, 4],
+    format_func=lambda x: f"{x}월"
+)
 
-# 데이터 복사 및 타입 변환
-data = df[["년도", col]].copy()
+st.subheader(f"{month}월 평균 상담건수")
+st.metric(
+    label=f"{month}월 평균",
+    value=f"{monthly_avg[month]:.1f}건"
+)
 
-# '년도'와 '값' 모두 숫자형으로 변환 (콤마나 문자열 포함 대비)
-data[col] = pd.to_numeric(data[col].astype(str).str.replace(',', ''), errors="coerce")
-data["년도"] = pd.to_numeric(data["년도"].astype(str).str.replace('년', ''), errors="coerce")
-data = data.dropna()
+st.divider()
 
-if data.empty:
-    st.error("분석 가능한 유효 데이터가 없습니다. (숫자 형식이 맞는지 확인하세요)")
-    st.stop()
+# 최고 날짜
+st.subheader("📈 최고 상담건수")
+st.write(
+    f"**{int(max_row['연'])}년 {int(max_row['월'])}월 {int(max_row['일'])}일**"
+)
+st.write(f"상담건수 : **{int(max_row['상담건수'])}건**")
 
-# 4. 분석 지표 계산
-max_row = data.loc[data[col].idxmax()]
-min_row = data.loc[data[col].idxmin()]
-avg = data[col].mean()
+# 최저 날짜
+st.subheader("📉 최저 상담건수")
+st.write(
+    f"**{int(min_row['연'])}년 {int(min_row['월'])}월 {int(min_row['일'])}일**"
+)
+st.write(f"상담건수 : **{int(min_row['상담건수'])}건**")
 
-# 5. 결과 시각화
-st.header(f"📌 {choice} 분석 결과")
+st.divider()
 
-# 메트릭 카드로 깔끔하게 표시
-c1, c2, c3 = st.columns(3)
-c1.metric("최고 기록 연도", f"{int(max_row['년도'])}년", f"{max_row[col]:.2f}")
-c2.metric("최저 기록 연도", f"{int(min_row['년도'])}년", f"{min_row[col]:.2f}")
-c3.metric("평균 자살률", f"{avg:.2f}")
+# 증가 감소 경향 분석
+st.subheader("📊 증가·감소 경향 분석")
 
-# 차트 추가 (추세 확인용)
-st.subheader("📈 연도별 추세")
-st.line_chart(data.set_index("년도")[col])
+jan = monthly_avg[1]
+feb = monthly_avg[2]
+mar = monthly_avg[3]
+apr = monthly_avg[4]
 
-# 데이터프레임 내림차순 정렬 표시
-st.subheader("📋 자살률이 높은 순")
-sorted_df = data.sort_values(by=col, ascending=False).copy()
-sorted_df.columns = ["년도", f"{choice}(10만명당)"]
-st.dataframe(sorted_df.style.highlight_max(axis=0, color='lightcoral'), use_container_width=True)
+analysis = []
+
+if feb > jan:
+    analysis.append("• 1월보다 2월의 평균 상담건수가 증가했습니다.")
+else:
+    analysis.append("• 1월보다 2월의 평균 상담건수가 감소했습니다.")
+
+if mar > feb:
+    analysis.append("• 2월보다 3월의 평균 상담건수가 증가했습니다.")
+else:
+    analysis.append("• 2월보다 3월의 평균 상담건수가 감소했습니다.")
+
+if apr > mar:
+    analysis.append("• 3월보다 4월의 평균 상담건수가 증가했습니다.")
+else:
+    analysis.append("• 3월보다 4월의 평균 상담건수가 감소했습니다.")
+
+for text in analysis:
+    st.write(text)
+
+st.write("")
+st.write("### 종합 분석")
+
+if jan == monthly_avg.max():
+    highest_month = 1
+elif feb == monthly_avg.max():
+    highest_month = 2
+elif mar == monthly_avg.max():
+    highest_month = 3
+else:
+    highest_month = 4
+
+if jan == monthly_avg.min():
+    lowest_month = 1
+elif feb == monthly_avg.min():
+    lowest_month = 2
+elif mar == monthly_avg.min():
+    lowest_month = 3
+else:
+    lowest_month = 4
+
+st.write(
+    f"""
+- 평균 상담건수가 가장 높은 달은 **{highest_month}월**입니다.
+- 평균 상담건수가 가장 낮은 달은 **{lowest_month}월**입니다.
+- 1월부터 3월까지는 전반적으로 감소하는 경향을 보였습니다.
+- 4월에는 상담건수가 다시 증가하는 모습을 보였습니다.
+- 전체적으로 상담건수는 증가와 감소를 반복하며 변동하는 경향을 나타냅니다.
+"""
+)
